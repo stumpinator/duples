@@ -6,14 +6,14 @@
 #include <stdarg.h>
 #include <unistd.h>
 
-#include <conf.h>
-#include <raw_parser.h>
-#include <log.h>
-#include <packet_sock.h>
-#include <netdev.h>
+#include <uwifi/conf.h>
+#include <uwifi/raw_parser.h>
+#include <uwifi/log.h>
+#include <uwifi/packet_sock.h>
+#include <uwifi/netdev.h>
 //#include <radiotap.h>
-#include <ifctrl.h>
-#include <channel.h>
+#include <uwifi/ifctrl.h>
+#include <uwifi/channel.h>
 
 static int MYLL = LL_INFO;
 

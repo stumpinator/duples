@@ -4,12 +4,12 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include <conf.h>
-#include <raw_parser.h>
-#include <log.h>
-#include <packet_sock.h>
-#include <wlan_parser.h>
-#include <ifctrl.h>
+#include <uwifi/conf.h>
+#include <uwifi/raw_parser.h>
+#include <uwifi/log.h>
+#include <uwifi/packet_sock.h>
+#include <uwifi/wlan_parser.h>
+#include <uwifi/ifctrl.h>
 
 #include "duples.h"
 
