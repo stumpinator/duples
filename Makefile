@@ -1,13 +1,22 @@
-CC=gcc
-PLATFORM=linux
-DEBUG=0
+BUILD_UWIFI=0
+OPENWRT=0
 
-IFLAGS = -I.
-IFLAGS += -I./libuwifi/include/uwifi
-IFLAGS += -I./libuwifi/linux/
+INCLUDES = -I.
+INCLUDES += -I./libuwifi/include/uwifi
+INCLUDES += -I./libuwifi/linux/
 
-LFLAGS = -luwifi
-LFLAGS += -L./libuwifi/build/
+LDLIBS += -luwifi
+UWIFI_DEP=
+
+ifeq ($(BUILD_UWIFI),1)
+	UWIFI_DEP=./libuwifi/build/libuwifi.so.1
+	LDFLAGS+=-L./libuwifi/build/
+endif
+
+ifeq ($(OPENWRT),1)
+	LDLIBS += -lradiotap
+	LDLIBS += -lnl-tiny
+endif
 
 all: udpfwduwifi chancycler
 
@@ -15,19 +24,19 @@ all: udpfwduwifi chancycler
 	git submodule update --init --recursive
 
 ./libuwifi/build/libuwifi.so.1: ./libuwifi/Makefile
-	$(MAKE) -C libuwifi DEBUG=$(DEBUG) PLATFORM=$(PLATFORM)
+	$(MAKE) -C libuwifi DEBUG=0 PLATFORM=linux
 
-udpfwduwifi.o: udpfwduwifi.c duples.h ./libuwifi/build/libuwifi.so.1
-	$(CC) -c -o $@ $< $(IFLAGS)
+udpfwduwifi.o: udpfwduwifi.c duples.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $< $(INCLUDES)
 
-udpfwduwifi: udpfwduwifi.o
-	$(CC) -o $@ $^ $(LFLAGS)
+udpfwduwifi: udpfwduwifi.o $(UWIFI_DEP)
+	$(CC) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
-chancycler.o: chancycler.c ./libuwifi/build/libuwifi.so.1
-	$(CC) -c -o $@ $< $(IFLAGS)
+chancycler.o: chancycler.c 
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $< $(INCLUDES)
 
-chancycler: chancycler.o
-	$(CC) -o $@ $^ $(LFLAGS)
+chancycler: chancycler.o $(UWIFI_DEP)
+	$(CC) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
 clean-duples:
 	rm -f *.o
