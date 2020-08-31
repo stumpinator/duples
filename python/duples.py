@@ -34,9 +34,7 @@ def duples_packet_thread(sock, logq, active, pktfilter):
     logq.close()
 
 class DuplesHeader:
-    hdr_flags = struct.Struct("bb?b")
-    hdr_ints = { True:struct.Struct("<HxxLL"), False:struct.Struct(">HxxLL") }
-    min_sz = hdr_flags.size
+    hdr_structs = { (1,16):struct.Struct(">bb?bHxxLL") } #header structs indexed by version and size
     DUPLES_PAYLOAD_RAW = 0
     DUPLES_PAYLOAD_UWIFI = 1
     def __init__(self, data=None):
@@ -51,16 +49,22 @@ class DuplesHeader:
             self.parsedata(data)
 
     def parsedata(self, data):
-        if len(data) < self.min_sz:
-            raise Exception(f"Expected data is too small.  Expected >= {self.min_sz} Received {len(data)}")
+        if len(data) < 2
+            raise Exception(f"Expected data is too small.")
         
-        self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE = self.hdr_flags.unpack_from(data)
+        hver = data[0]
+        hsz = data[1]
+        
+        hdrstruct = hdr_structs.get((hver,hsz),None)
+
+        if hdrstruct is None:
+            raise Exception("Invalid header or uknown header type.")
 
         if len(data) < self.HDR_SIZE:
             raise Exception(f"Expected header is too small.  Expected >= {self.HDR_SIZE} Received {len(data)}")
         
-        hdr_int = self.hdr_ints.get(self.LE_SRC, None)
-        self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC = hdr_int.unpack_from(data, self.hdr_flags.size)
+        self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC = hdrstruct.unpack_from(data)
+
 
 class UwifiPacket:
     uwifi_structs = { (True, 1, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \

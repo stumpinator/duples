@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
     rhdr->hdr_size = sizeof(struct duples_header);
     rhdr->le_src = (__BYTE_ORDER == __LITTLE_ENDIAN);
     rhdr->pload_type = DUPLES_PAYLOAD_UWIFI;
-    rhdr->pload_size = sizeof(struct uwifi_packet);
+    rhdr->pload_size = htons(sizeof(struct uwifi_packet));
 
     while (true)
     {
@@ -102,6 +102,8 @@ int main(int argc, char **argv) {
             if (rsize >= 0)
             {
                 gettimeofday(&rhdr->cap_ts, NULL);
+                rhdr->cap_ts.tv_sec = htonl(rhdr->cap_ts.tv_sec);
+                rhdr->cap_ts.tv_usec = htonl(rhdr->cap_ts.tv_usec);
                 //printf("sec: %d usec: %i rsize: %i\n", spkt->header.cap_ts.tv_sec, spkt->header.cap_ts.tv_usec, rsize);
                 if (sendto(outfd, (const void *)rspkt, total_size, 0, (struct sockaddr *)&destaddr, sizeof(destaddr)) < 0)
                 {
