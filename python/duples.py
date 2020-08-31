@@ -49,21 +49,37 @@ class DuplesHeader:
             self.parsedata(data)
 
     def parsedata(self, data):
-        if len(data) < 2
+        if len(data) < 2:
             raise Exception(f"Expected data is too small.")
         
         hver = data[0]
         hsz = data[1]
-        
-        hdrstruct = hdr_structs.get((hver,hsz),None)
+        hdrstruct = self.hdr_structs.get((hver,hsz),None)
 
         if hdrstruct is None:
             raise Exception("Invalid header or uknown header type.")
 
-        if len(data) < self.HDR_SIZE:
+        if len(data) < hsz:
             raise Exception(f"Expected header is too small.  Expected >= {self.HDR_SIZE} Received {len(data)}")
         
         self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC = hdrstruct.unpack_from(data)
+    
+    def setvalues(self, hdr_ver=1, hdr_size=16, le=False, ptype=0, psize=0, tvsec=0, tvusec=0):
+        self.HDR_VER = hdr_ver
+        self.HDR_SIZE = hdr_size
+        self.LE_SRC = le
+        self.PLOAD_TYPE = ptype
+        self.PLOAD_SIZE = psize
+        self.TV_SEC = tvsec
+        self.TV_USEC = tvusec
+        
+    def build(self):
+        hdrstruct = self.hdr_structs.get((self.HDR_VER,self.HDR_SIZE),None)
+
+        if hdrstruct is None:
+            raise Exception("Invalid header or uknown header type.")
+
+        return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC)
 
 
 class UwifiPacket:
