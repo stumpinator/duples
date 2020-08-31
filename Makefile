@@ -17,7 +17,7 @@ ifeq ($(OPENWRT),1)
 	LDLIBS += -lnl-tiny
 endif
 
-all: udpfwduwifi chancycler udprcvraw
+all: udpfwduwifi chancycler udpinjector
 
 ./libuwifi/Makefile:
 	git submodule update --init --recursive
@@ -36,10 +36,10 @@ udpfwduwifi.o: udpfwduwifi.c duples.h $(UWIFI_DEP)
 udpfwduwifi: udpfwduwifi.o 
 	$(CC) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
-udprcvraw.o: udprcvraw.c duples.h $(UWIFI_DEP)
+udpinjector.o: udpinjector.c duples.h $(UWIFI_DEP)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $< $(INCLUDES)
 
-udprcvraw: udprcvraw.o 
+udpinjector: udpinjector.o 
 	$(CC) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
 chancycler.o: chancycler.c $(UWIFI_DEP)
@@ -51,7 +51,7 @@ chancycler: chancycler.o
 clean-duples:
 	rm -f *.o
 	rm -f udpfwduwifi
-	rm -f udprcvraw
+	rm -f udpinjector
 	rm -f chancycler
 
 clean-uwifi:
