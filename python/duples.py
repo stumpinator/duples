@@ -34,7 +34,8 @@ def duples_packet_thread(sock, logq, active, pktfilter):
     logq.close()
 
 class DuplesHeader:
-    hdr_structs = { (1,16):struct.Struct(">bb?bHxxLL") } #header structs indexed by version and size
+    hdr_structs = { (1,16):struct.Struct(">bb?bHxxLL"), \
+                    (1,24):struct.Struct(">bb?bHxxQQ") } #header structs indexed by version and size
     DUPLES_PAYLOAD_RAW = 0
     DUPLES_PAYLOAD_UWIFI = 1
     def __init__(self, data=None):
@@ -57,7 +58,7 @@ class DuplesHeader:
         hdrstruct = self.hdr_structs.get((hver,hsz),None)
 
         if hdrstruct is None:
-            raise Exception("Invalid header or uknown header type.")
+            raise Exception(f"Invalid header or uknown header type. Header version {hver} size {hsz}")
 
         if len(data) < hsz:
             raise Exception(f"Expected header is too small.  Expected >= {self.HDR_SIZE} Received {len(data)}")
@@ -77,7 +78,7 @@ class DuplesHeader:
         hdrstruct = self.hdr_structs.get((self.HDR_VER,self.HDR_SIZE),None)
 
         if hdrstruct is None:
-            raise Exception("Invalid header or uknown header type.")
+            raise Exception(f"Invalid header or uknown header type. Header version {self.HDR_VER} size {self.HDR_SIZE}")
 
         return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC)
 
