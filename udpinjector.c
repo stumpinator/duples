@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 #include <uwifi/conf.h>
 #include <uwifi/raw_parser.h>
@@ -24,35 +25,84 @@
 //log level
 static int MYLL = LL_INFO;
 
+struct udpinjopts
+{
+    char *ifname;
+    struct in_addr daddr;
+    uint16_t dport;
+    bool daemonize;
+};
+
+bool parseopts(int argc, char **argv, struct udpinjopts *myopts)
+{
+    int opt = 0;
+    
+    memset(myopts, 0, sizeof(struct udpinjopts));
+    myopts->daemonize = false;
+    //myopts->dport = 2400;
+
+    while ((opt = getopt(argc, argv, ":m:i:p:d")) != -1)
+    {
+        switch(opt)
+        {
+            case 'm':
+                myopts->ifname = optarg;
+                break;
+            case 'i':
+                if ((inet_aton(optarg, &myopts->daddr)) == 0)
+                {
+                    return false;
+                }
+                break;
+            case 'p':
+                if (sscanf(optarg, "%hu", &myopts->dport) != 1)
+                {
+                    return false;
+                }
+                break;
+            case 'd':
+                myopts->daemonize = true;
+                break;
+            case ':':
+            case '?':
+            default:
+                return false;
+        }
+    }
+
+    if ((myopts->ifname == NULL) || (myopts->daddr.s_addr == 0) || (myopts->dport == 0))
+    {
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
+    struct udpinjopts myopts;
     struct uwifi_interface *iface = calloc(1, sizeof(struct uwifi_interface));
     unsigned int buffsize = 4096; //size of buffer for packets
     unsigned char *buffr = calloc(1, buffsize); //packet buffer
     unsigned int total_size = 0; //sizeof(struct duples_header) + payload size
     struct duples_header *rhdr; // = (struct duples_header *)rspkt;
     int rsize = -1;
-    
-    //socket vars
+    int opt = 0;
     int sockfd = -1;
     struct sockaddr_in servaddr, clientaddr;
-    uint16_t d_port = 2345;
     struct iovec iov; //used for recvmsg
     struct msghdr message; //used for recvmsg
-
-    if (argc < 4)
+    
+    memset(&servaddr, 0, sizeof(struct sockaddr_in));
+    memset(&clientaddr, 0, sizeof(struct sockaddr_in));
+    memset(&iov, 0, sizeof(iov));
+    memset(&message, 0, sizeof(message));
+    
+    if (!parseopts(argc, argv, &myopts))
     {
-        LOG_ERR("usage: %s <iface> <host/ip> <port>", argv[0]);
-        printf("example: %s mon0 127.0.0.1 2345\n", argv[0]);
+        printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 [-d]\n", argv[0]);
         return 1;
     }
-
-    if (sscanf(argv[3], "%hu", &d_port) != 1)
-    {
-        LOG_ERR("Invalid argument (%s) for port.", argv[3]);
-        return 2;
-    }
-
-    strncpy(iface->ifname, argv[1], IF_NAMESIZE);
+    
+    strncpy(iface->ifname, myopts.ifname, IF_NAMESIZE);
     LOG_INF("Using interface %s", iface->ifname);
 
     if (!ifctrl_init())
@@ -81,14 +131,10 @@ int main(int argc, char **argv) {
         return 5;
     }
 
-    memset(&servaddr, 0, sizeof(struct sockaddr_in));
-    memset(&clientaddr, 0, sizeof(struct sockaddr_in));
-    memset(&iov, 0, sizeof(iov));
-    memset(&message, 0, sizeof(message));
-
     servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr(argv[2]);
-    servaddr.sin_port = htons(d_port);
+    //servaddr.sin_addr.s_addr = inet_addr(argv[2]);
+    servaddr.sin_addr = myopts.daddr;
+    servaddr.sin_port = htons(myopts.dport);
 
     iov.iov_base = buffr;
     iov.iov_len = buffsize;
@@ -98,12 +144,11 @@ int main(int argc, char **argv) {
     message.msg_iovlen = 1;
     message.msg_control = 0;
     message.msg_controllen = 0;
-
     
     rsize = bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr));
     if (rsize != 0)
     {
-        LOG_ERR("Error binding to %s:%s", argv[2], argv[3]);
+        LOG_ERR("Error binding to %s:%i", inet_ntoa(myopts.daddr), myopts.dport);
         return 6;
     }
 

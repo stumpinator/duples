@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 #include <uwifi/conf.h>
 #include <uwifi/raw_parser.h>
@@ -23,7 +24,60 @@
 //log level
 static int MYLL = LL_INFO;
 
+struct udpfwdopts
+{
+    char *ifname;
+    struct in_addr daddr;
+    uint16_t dport;
+    bool daemonize;
+};
+
+bool parseopts(int argc, char **argv, struct udpfwdopts *myopts)
+{
+    int opt = 0;
+    
+    memset(myopts, 0, sizeof(struct udpfwdopts));
+    myopts->daemonize = false;
+    //myopts->dport = 2400;
+
+    while ((opt = getopt(argc, argv, ":m:i:p:d")) != -1)
+    {
+        switch(opt)
+        {
+            case 'm':
+                myopts->ifname = optarg;
+                break;
+            case 'i':
+                if ((inet_aton(optarg, &myopts->daddr)) == 0)
+                {
+                    return false;
+                }
+                break;
+            case 'p':
+                if (sscanf(optarg, "%hu", &myopts->dport) != 1)
+                {
+                    return false;
+                }
+                break;
+            case 'd':
+                myopts->daemonize = true;
+                break;
+            case ':':
+            case '?':
+            default:
+                return false;
+        }
+    }
+
+    if ((myopts->ifname == NULL) || (myopts->daddr.s_addr == 0) || (myopts->dport == 0))
+    {
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
+    struct udpfwdopts myopts;
     struct uwifi_interface *iface = calloc(1, sizeof(struct uwifi_interface));
     unsigned int buffsize = 4096; //size of buffer for packets
     unsigned char *buffr = calloc(1, buffsize); //packet buffer
@@ -32,26 +86,16 @@ int main(int argc, char **argv) {
     struct duples_header *rhdr = (struct duples_header *)rspkt;
     struct uwifi_packet *upkt = (struct uwifi_packet *)(rspkt + sizeof(struct duples_header));
     int rsize = -1;
-    
-    //forwarding socket vars
     int outfd = -1;
     struct sockaddr_in destaddr;
-    uint16_t d_port = 2345;
-
-    if (argc < 4)
+    
+    if (!parseopts(argc, argv, &myopts))
     {
-        LOG_ERR("usage: %s <iface> <host/ip> <port>", argv[0]);
-        printf("example: %s mon0 127.0.0.1 2345\n", argv[0]);
+        printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 [-d]\n", argv[0]);
         return 1;
     }
-
-    if (sscanf(argv[3], "%hu", &d_port) != 1)
-    {
-        LOG_ERR("Invalid argument (%s) for port.", argv[3]);
-        return 2;
-    }
-
-    strncpy(iface->ifname, argv[1], IF_NAMESIZE);
+    
+    strncpy(iface->ifname, myopts.ifname, IF_NAMESIZE);
     LOG_INF("Using interface %s", iface->ifname);
 
     if (!ifctrl_init())
@@ -79,11 +123,12 @@ int main(int argc, char **argv) {
         LOG_ERR("Couldn't open outgoing UDP socket.");
         return 5;
     }
-
+    
+    //destination address
     memset(&destaddr, 0, sizeof(struct sockaddr_in));
     destaddr.sin_family = AF_INET;
-    destaddr.sin_addr.s_addr = inet_addr(argv[2]);
-    destaddr.sin_port = htons(d_port);
+    destaddr.sin_port = htons(myopts.dport);
+    destaddr.sin_addr = myopts.daddr;
 
     //initialize the reusable packet variables
     rhdr->hdr_version = 1;
