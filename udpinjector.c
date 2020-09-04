@@ -157,13 +157,22 @@ int main(int argc, char **argv) {
     while (CONTINUE_PROCESSING)
     {
         rsize = recvmsg(sockfd, &message, 0);
-        if (rsize < 2) { continue; }
+        if (rsize < 2) { 
+            LOG_INF("Received size (%i) too small to process header", rsize);
+            continue; 
+        }
     
         dhdr = (struct duples_header *)buffr;
-        if (rsize < dhdr->hdr_size) { continue; }
+        if (rsize < dhdr->hdr_size) { 
+            LOG_INF("Received size smaller than expected header size (%i)", dhdr->hdr_size);
+            continue; 
+        }
         
-        total_size = dhdr->hdr_size + dhdr->pload_size;
-        if (rsize < total_size) { continue; }
+        total_size = dhdr->hdr_size + ntohs(dhdr->pload_size);
+        if (rsize < total_size) { 
+            LOG_INF("Total size smaller than expected size (%i)", total_size);
+            continue;
+        }
 
         if (dhdr->pload_type != DUPLES_PAYLOAD_RTAP)
         {
@@ -171,7 +180,7 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        rsize = send(iface->sock, buffr + dhdr->hdr_size, dhdr->pload_size, MSG_DONTWAIT);
+        rsize = send(iface->sock, buffr + dhdr->hdr_size, ntohs(dhdr->pload_size), MSG_DONTWAIT);
         if (rsize == -1)
         {
             LOG_ERR("Error occured sending message over interface %s", iface->ifname);
