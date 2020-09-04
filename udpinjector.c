@@ -11,7 +11,7 @@
 #include <uwifi/packet_sock.h>
 #include <uwifi/wlan_parser.h>
 #include <uwifi/ifctrl.h>
-#include <uwifi/inject.h>
+//#include <uwifi/inject.h>
 
 #include "duples.h"
 
@@ -24,6 +24,8 @@
 
 //log level
 static int MYLL = LL_INFO;
+//loop flag
+static bool CONTINUE_PROCESSING = true;
 
 struct udpinjopts
 {
@@ -83,7 +85,7 @@ int main(int argc, char **argv) {
     unsigned int buffsize = 4096; //size of buffer for packets
     unsigned char *buffr = calloc(1, buffsize); //packet buffer
     unsigned int total_size = 0; //sizeof(struct duples_header) + payload size
-    struct duples_header *rhdr; // = (struct duples_header *)rspkt;
+    struct duples_header *dhdr; // = (struct duples_header *)rspkt;
     int rsize = -1;
     int opt = 0;
     int sockfd = -1;
@@ -152,21 +154,33 @@ int main(int argc, char **argv) {
         return 6;
     }
 
-    while (true)
+    while (CONTINUE_PROCESSING)
     {
         rsize = recvmsg(sockfd, &message, 0);
-        if (rsize > 0)
+        if (rsize < 2) { continue; }
+    
+        dhdr = (struct duples_header *)buffr;
+        if (rsize < dhdr->hdr_size) { continue; }
+        
+        total_size = dhdr->hdr_size + dhdr->pload_size;
+        if (rsize < total_size) { continue; }
+
+        if (dhdr->pload_type != DUPLES_PAYLOAD_RTAP)
         {
-            rsize = send(iface->sock, buffr, rsize, MSG_DONTWAIT);
-            if (rsize == -1)
-            {
-                LOG_ERR("Error occured sending message over interface %s", iface->ifname);
-            }
-            else
-            {
-                LOG_INF("Sent %i bytes", rsize);
-            }
+            LOG_ERR("Received invalid payload type %i", dhdr->pload_type);
+            continue;
         }
+
+        rsize = send(iface->sock, buffr + dhdr->hdr_size, dhdr->pload_size, MSG_DONTWAIT);
+        if (rsize == -1)
+        {
+            LOG_ERR("Error occured sending message over interface %s", iface->ifname);
+        }
+        else
+        {
+            LOG_INF("Sent %i bytes", rsize);
+        }
+        
     }
 
     /* cleanup and exit */
