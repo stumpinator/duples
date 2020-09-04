@@ -38,6 +38,7 @@ class DuplesHeader:
                     (1,24):struct.Struct(">bb?bHxxQQ") } #header structs indexed by version and size
     DUPLES_PAYLOAD_RAW = 0
     DUPLES_PAYLOAD_UWIFI = 1
+    DUPLES_PAYLOAD_RTAP = 2
     def __init__(self, data=None):
         self.HDR_VER = None
         self.HDR_SIZE = None
@@ -61,7 +62,7 @@ class DuplesHeader:
             raise Exception(f"Invalid header or uknown header type. Header version {hver} size {hsz}")
 
         if len(data) < hsz:
-            raise Exception(f"Expected header is too small.  Expected >= {self.HDR_SIZE} Received {len(data)}")
+            raise Exception(f"Expected header is too small.  Expected > {hsz} Received {len(data)}")
         
         self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC = hdrstruct.unpack_from(data)
     
@@ -82,10 +83,9 @@ class DuplesHeader:
 
         return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC)
 
-
 class UwifiPacket:
-    uwifi_structs = { (True, 1, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
-                    (False, 1, 168):struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
+    uwifi_structs = { (True, DUPLES_PAYLOAD_UWIFI, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
+                    (False, DUPLES_PAYLOAD_UWIFI, 168):struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
     macaddr_struct = struct.Struct("BBBBBB")
     macaddr_format = "%02x:%02x:%02x:%02x:%02x:%02x"
     
@@ -284,5 +284,25 @@ class DuplesUDPReceiver:
         self.childprocs.clear()
         self.initialized = False
 
+class DuplesUDPSender:
+    DEF_RTAP = b'\x00\x00\x08\x00\x00\x00\x00\x00'
+    def __init__(self, ip, port):
+        self.dest_ip = ip
+        self.dest_port = port
+        self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.header = DuplesHeader()
+        self.header.setvalues()
+    
+    def send(self, data, addradiotap=False, ptype=DuplesHeader.DUPLES_PAYLOAD_RTAP):
+        assert type(ptype) is int, f"Invalid packet type ({ptype}).  Must be int type."
+        if addradiotap:
+            pload = DEF_RTAP + bytes(data)
+        else:
+            pload = bytes(data)
+        self.header.PLOAD_SIZE = len(pload)
+        self.header.PLOAD_TYPE = ptype
+        packet = self.header.build() + pload
+        self.send_socket.sendto(packet, (self.dest_ip, self.dest_port))
+        
 if __name__ == "__main__":
     pass
