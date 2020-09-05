@@ -191,9 +191,9 @@ int main(int argc, char **argv) {
 
     while (CONTINUE_PROCESSING)
     {
-        rsize = recvmsg(sockfd, &message, 0);
+        rsize = recvmsg(sockfd, &message, MSG_DONTWAIT);
         if (rsize < 2) { 
-            LOG_INF("Received size (%i) too small to process header", rsize);
+            //LOG_INF("Received size (%i) too small to process header", rsize);
             continue; 
         }
     

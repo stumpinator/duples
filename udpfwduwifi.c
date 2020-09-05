@@ -120,6 +120,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     
+    MYLL = myopts.loglevel;
     strncpy(iface->ifname, myopts.ifname, IF_NAMESIZE);
     LOG_INF("Using interface %s", iface->ifname);
 
