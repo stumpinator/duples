@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <uwifi/conf.h>
 #include <uwifi/raw_parser.h>
@@ -11,11 +12,8 @@
 #include <uwifi/packet_sock.h>
 #include <uwifi/wlan_parser.h>
 #include <uwifi/ifctrl.h>
-//#include <uwifi/inject.h>
 
 #include "duples.h"
-
-//#include <endian.h>
 
 //socket stuff
 #include <sys/socket.h>
@@ -32,18 +30,21 @@ struct udpinjopts
     char *ifname;
     struct in_addr daddr;
     uint16_t dport;
+    uint16_t loglevel;
     bool daemonize;
 };
 
 bool parseopts(int argc, char **argv, struct udpinjopts *myopts)
 {
     int opt = 0;
-    
+    int ll = 0;
+
     memset(myopts, 0, sizeof(struct udpinjopts));
     myopts->daemonize = false;
+    myopts->loglevel = MYLL;
     //myopts->dport = 2400;
 
-    while ((opt = getopt(argc, argv, ":m:i:p:d")) != -1)
+    while ((opt = getopt(argc, argv, ":m:i:p:l:d")) != -1)
     {
         switch(opt)
         {
@@ -62,6 +63,12 @@ bool parseopts(int argc, char **argv, struct udpinjopts *myopts)
                     return false;
                 }
                 break;
+            case 'l':
+                if (sscanf(optarg, "%hu", &myopts->loglevel) != 1)
+                {
+                    return false;
+                }
+                break;
             case 'd':
                 myopts->daemonize = true;
                 break;
@@ -72,11 +79,21 @@ bool parseopts(int argc, char **argv, struct udpinjopts *myopts)
         }
     }
 
+    //ensure log level falls in proper range (LL_CRIT to LL_DEBUG)
+    myopts->loglevel = (myopts->loglevel < LL_CRIT) ? LL_CRIT : myopts->loglevel;
+    myopts->loglevel = (myopts->loglevel > LL_DEBUG) ? LL_DEBUG : myopts->loglevel;
+
     if ((myopts->ifname == NULL) || (myopts->daddr.s_addr == 0) || (myopts->dport == 0))
     {
         return false;
     }
     return true;
+}
+
+static void sig_handler(int signumber)
+{
+    LOG_INF("Caught signal");
+    CONTINUE_PROCESSING = false;
 }
 
 int main(int argc, char **argv) {
@@ -100,13 +117,19 @@ int main(int argc, char **argv) {
     
     if (!parseopts(argc, argv, &myopts))
     {
-        printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 [-d]\n", argv[0]);
+        printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 -l 2 -d\n", argv[0]);
+        printf("-m      monitor interface to inject packets\n");
+        printf("-i      IP to listen for UDP packets\n");
+        printf("-p      port to listen for UDP packets\n");
+        printf("-l      log level 2(CRIT) - 7(DEBUG).  default 6(INFO)\n");
+        printf("-d      daemonize.  default false.  currently not implemented.");
         return 1;
     }
     
+    MYLL = myopts.loglevel;
     strncpy(iface->ifname, myopts.ifname, IF_NAMESIZE);
     LOG_INF("Using interface %s", iface->ifname);
-
+    
     if (!ifctrl_init())
     {
         LOG_ERR("Error occured initializing interface control.");
@@ -154,6 +177,18 @@ int main(int argc, char **argv) {
         return 6;
     }
 
+    //register signals
+    if (signal(SIGINT, sig_handler) == SIG_ERR)
+    {
+        LOG_ERR("Error occurred setting the SIGINT handler");
+        return 6;
+    }
+    if (signal(SIGTERM, sig_handler) == SIG_ERR)
+    {
+        LOG_ERR("Error occurred setting the SIGTERM handler");
+        return 6;
+    }
+    
     while (CONTINUE_PROCESSING)
     {
         rsize = recvmsg(sockfd, &message, 0);
