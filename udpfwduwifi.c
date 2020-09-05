@@ -112,11 +112,11 @@ int main(int argc, char **argv) {
     if (!parseopts(argc, argv, &myopts))
     {
         printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 -l 2 -d\n", argv[0]);
-        printf("-m      monitor interface to inject packets\n");
+        printf("-m      monitor interface to sniff packets\n");
         printf("-i      IP to send UDP packets\n");
         printf("-p      port to send UDP packets\n");
         printf("-l      log level 2(CRIT) - 7(DEBUG).  default 6(INFO)\n");
-        printf("-d      daemonize.  default false.  currently not implemented.");
+        printf("-d      daemonize.  default false.  currently not implemented\n");
         return 1;
     }
     

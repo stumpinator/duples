@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
         printf("-i      IP to listen for UDP packets\n");
         printf("-p      port to listen for UDP packets\n");
         printf("-l      log level 2(CRIT) - 7(DEBUG).  default 6(INFO)\n");
-        printf("-d      daemonize.  default false.  currently not implemented.");
+        printf("-d      daemonize.  default false.  currently not implemented\n");
         return 1;
     }
     
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
         LOG_ERR("Error occurred setting the SIGTERM handler");
         return 6;
     }
-    
+
     while (CONTINUE_PROCESSING)
     {
         rsize = recvmsg(sockfd, &message, 0);
