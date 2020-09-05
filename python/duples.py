@@ -84,8 +84,8 @@ class DuplesHeader:
         return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC)
 
 class UwifiPacket:
-    uwifi_structs = { (True, DUPLES_PAYLOAD_UWIFI, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
-                    (False, DUPLES_PAYLOAD_UWIFI, 168):struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
+    uwifi_structs = { (True, DuplesHeader.DUPLES_PAYLOAD_UWIFI, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
+                    (False, DuplesHeader.DUPLES_PAYLOAD_UWIFI, 168):struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
     macaddr_struct = struct.Struct("BBBBBB")
     macaddr_format = "%02x:%02x:%02x:%02x:%02x:%02x"
     
