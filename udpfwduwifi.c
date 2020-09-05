@@ -109,7 +109,8 @@ int main(int argc, char **argv) {
     int rsize = -1;
     int outfd = -1;
     struct sockaddr_in destaddr;
-    
+    struct timeval socket_timeout;
+
     if (!parseopts(argc, argv, &myopts))
     {
         printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 -l 2 -d\n", argv[0]);
@@ -142,7 +143,15 @@ int main(int argc, char **argv) {
         LOG_ERR("Error during libuwifi initialization for interface %s.", iface->ifname);
         return 4;
     }
-    
+    //set timeout on the monitor socket
+    socket_timeout.tv_sec = 0;
+    socket_timeout.tv_usec = 10000;
+    if (setsockopt(iface->sock, SOL_SOCKET, SO_RCVTIMEO, (void *)&socket_timeout, sizeof(socket_timeout)) < 0)
+    {
+        LOG_ERR("Error setting socket timeout");
+        return 4;
+    }
+
     //initialize the outgoing UDP socket
     outfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (outfd < 0)
@@ -178,7 +187,8 @@ int main(int argc, char **argv) {
 
     while (CONTINUE_PROCESSING)
     {
-        rsize =  packet_socket_recv(iface->sock, buffr, buffsize);
+        //rsize =  packet_socket_recv(iface->sock, buffr, buffsize);
+        rsize = recv(iface->sock, buffr, buffsize, 0);
         if (rsize > 0)
         {
             memset(upkt, 0, sizeof(struct uwifi_packet));

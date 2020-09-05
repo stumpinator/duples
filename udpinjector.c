@@ -109,6 +109,7 @@ int main(int argc, char **argv) {
     struct sockaddr_in servaddr, clientaddr;
     struct iovec iov; //used for recvmsg
     struct msghdr message; //used for recvmsg
+    struct timeval socket_timeout;
     
     memset(&servaddr, 0, sizeof(struct sockaddr_in));
     memset(&clientaddr, 0, sizeof(struct sockaddr_in));
@@ -152,7 +153,14 @@ int main(int argc, char **argv) {
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0)
     {
-        LOG_ERR("Couldn't open outgoing UDP socket.");
+        LOG_ERR("Couldn't open UDP socket.");
+        return 5;
+    }
+    socket_timeout.tv_sec = 0;
+    socket_timeout.tv_usec = 10000;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&socket_timeout, sizeof(socket_timeout)) < 0)
+    {
+        LOG_ERR("Error setting socket timeout");
         return 5;
     }
 
@@ -191,7 +199,7 @@ int main(int argc, char **argv) {
 
     while (CONTINUE_PROCESSING)
     {
-        rsize = recvmsg(sockfd, &message, MSG_DONTWAIT);
+        rsize = recvmsg(sockfd, &message, 0);
         if (rsize < 2) { 
             //LOG_INF("Received size (%i) too small to process header", rsize);
             continue; 
