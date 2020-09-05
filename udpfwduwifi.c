@@ -42,6 +42,7 @@ bool parseopts(int argc, char **argv, struct udpfwdopts *myopts)
     
     memset(myopts, 0, sizeof(struct udpfwdopts));
     myopts->daemonize = false;
+    myopts->loglevel = MYLL;
     //myopts->dport = 2400;
 
     while ((opt = getopt(argc, argv, ":m:i:p:l:d")) != -1)
