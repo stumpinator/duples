@@ -23,7 +23,7 @@
 #include <arpa/inet.h>
 
 //log level
-static int MYLL = LL_INFO;
+static int MYLL = LL_ERR;
 //loop flag
 static bool CONTINUE_PROCESSING = true;
 
