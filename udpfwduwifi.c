@@ -43,7 +43,8 @@ bool parseopts(int argc, char **argv, struct udpfwdopts *myopts)
     memset(myopts, 0, sizeof(struct udpfwdopts));
     myopts->daemonize = false;
     myopts->loglevel = MYLL;
-    //myopts->dport = 2400;
+    myopts->dport = 2412;
+    inet_aton("127.0.0.1", &myopts->daddr);
 
     while ((opt = getopt(argc, argv, ":m:i:p:l:d")) != -1)
     {
@@ -84,7 +85,8 @@ bool parseopts(int argc, char **argv, struct udpfwdopts *myopts)
     myopts->loglevel = (myopts->loglevel < LL_CRIT) ? LL_CRIT : myopts->loglevel;
     myopts->loglevel = (myopts->loglevel > LL_DEBUG) ? LL_DEBUG : myopts->loglevel;
 
-    if ((myopts->ifname == NULL) || (myopts->daddr.s_addr == 0) || (myopts->dport == 0))
+    //if ((myopts->ifname == NULL) || (myopts->daddr.s_addr == 0) || (myopts->dport == 0))
+    if (myopts->ifname == NULL)
     {
         return false;
     }
@@ -93,8 +95,17 @@ bool parseopts(int argc, char **argv, struct udpfwdopts *myopts)
 
 static void sig_handler(int signumber)
 {
-    LOG_INF("Caught signal");
-    CONTINUE_PROCESSING = false;
+    switch(signumber)
+    {
+        case SIGHUP:
+            LOG_DBG("Caught SIGHUP");
+            break;
+        case SIGINT:
+        case SIGTERM:
+        default:
+            LOG_DBG("Caught signal");
+            CONTINUE_PROCESSING = false;
+    }
 }
 
 int main(int argc, char **argv) {
@@ -114,10 +125,10 @@ int main(int argc, char **argv) {
     if (!parseopts(argc, argv, &myopts))
     {
         printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 -l 2 -d\n", argv[0]);
-        printf("-m      monitor interface to sniff packets\n");
-        printf("-i      IP to send UDP packets\n");
-        printf("-p      port to send UDP packets\n");
-        printf("-l      log level 2(CRIT) - 7(DEBUG).  default 6(INFO)\n");
+        printf("-m      monitor interface to sniff packets. required\n");
+        printf("-i      IP to send UDP packets. default 127.0.0.1\n");
+        printf("-p      port to send UDP packets. default 2412\n");
+        printf("-l      log level 2(CRIT) - 7(DEBUG).  default 3(ERROR)\n");
         printf("-d      daemonize.  default false.  currently not implemented\n");
         return 1;
     }
@@ -184,31 +195,38 @@ int main(int argc, char **argv) {
         LOG_ERR("Error occurred setting the SIGTERM handler");
         return 6;
     }
+    if (signal(SIGHUP, sig_handler) == SIG_ERR)
+    {
+        LOG_ERR("Error occurred setting the SIGHUP handler");
+        return 6;
+    }
 
     while (CONTINUE_PROCESSING)
     {
-        //rsize =  packet_socket_recv(iface->sock, buffr, buffsize);
         rsize = recv(iface->sock, buffr, buffsize, 0);
-        if (rsize > 0)
+        if (rsize <= 0)
         {
-            memset(upkt, 0, sizeof(struct uwifi_packet));
-            rsize = uwifi_parse_raw(buffr, rsize, upkt, iface->arphdr);
-            if (rsize >= 0)
-            {
-                gettimeofday(&rhdr->cap_ts, NULL);
-                rhdr->cap_ts.tv_sec = htonl(rhdr->cap_ts.tv_sec);
-                rhdr->cap_ts.tv_usec = htonl(rhdr->cap_ts.tv_usec);
-                //printf("sec: %d usec: %i rsize: %i\n", spkt->header.cap_ts.tv_sec, spkt->header.cap_ts.tv_usec, rsize);
-                if (sendto(outfd, (const void *)rspkt, total_size, 0, (struct sockaddr *)&destaddr, sizeof(destaddr)) < 0)
-                {
-                    LOG_ERR("Error forwarding packet metadata.");
-                    break;
-                }
-            }
+            continue;
         }
+            
+        memset(upkt, 0, sizeof(struct uwifi_packet));
+        rsize = uwifi_parse_raw(buffr, rsize, upkt, iface->arphdr);
+        if (rsize < 0)
+        {
+            LOG_DBG("Error parsing with uwifi.");
+            continue;
+        }
+        
+        if (sendto(outfd, (const void *)rspkt, total_size, 0, (struct sockaddr *)&destaddr, sizeof(destaddr)) < 0)
+        {
+            LOG_ERR("Error forwarding packet metadata.  Shutting down.");
+            break;
+        }
+        
     }
 
     /* cleanup and exit */
+    LOG_INF("Cleaning up and shutting down");
     ifctrl_finish();
     uwifi_fini(iface);
     free(iface);
@@ -220,9 +238,9 @@ int main(int argc, char **argv) {
 void __attribute__ ((format (printf, 2, 3)))
 log_out(enum loglevel ll, const char *fmt, ...)
 {
+    va_list args;
     if (MYLL >= ll)
     {
-        va_list args;
         va_start(args, fmt);
         switch (ll)
         {

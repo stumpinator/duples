@@ -21,7 +21,7 @@
 #include <arpa/inet.h>
 
 //log level
-static int MYLL = LL_INFO;
+static int MYLL = LL_ERR;
 //loop flag
 static bool CONTINUE_PROCESSING = true;
 
@@ -42,7 +42,9 @@ bool parseopts(int argc, char **argv, struct udpinjopts *myopts)
     memset(myopts, 0, sizeof(struct udpinjopts));
     myopts->daemonize = false;
     myopts->loglevel = MYLL;
-    //myopts->dport = 2400;
+    myopts->dport = 2400;
+    inet_aton("127.0.0.1", &myopts->daddr);
+
 
     while ((opt = getopt(argc, argv, ":m:i:p:l:d")) != -1)
     {
@@ -83,7 +85,8 @@ bool parseopts(int argc, char **argv, struct udpinjopts *myopts)
     myopts->loglevel = (myopts->loglevel < LL_CRIT) ? LL_CRIT : myopts->loglevel;
     myopts->loglevel = (myopts->loglevel > LL_DEBUG) ? LL_DEBUG : myopts->loglevel;
 
-    if ((myopts->ifname == NULL) || (myopts->daddr.s_addr == 0) || (myopts->dport == 0))
+    //if ((myopts->ifname == NULL) || (myopts->daddr.s_addr == 0) || (myopts->dport == 0))
+    if (myopts->ifname == NULL)
     {
         return false;
     }
@@ -92,8 +95,17 @@ bool parseopts(int argc, char **argv, struct udpinjopts *myopts)
 
 static void sig_handler(int signumber)
 {
-    LOG_INF("Caught signal");
-    CONTINUE_PROCESSING = false;
+    switch(signumber)
+    {
+        case SIGHUP:
+            LOG_DBG("Caught SIGHUP");
+            break;
+        case SIGINT:
+        case SIGTERM:
+        default:
+            LOG_DBG("Caught signal");
+            CONTINUE_PROCESSING = false;
+    }
 }
 
 int main(int argc, char **argv) {
@@ -118,12 +130,13 @@ int main(int argc, char **argv) {
     
     if (!parseopts(argc, argv, &myopts))
     {
-        printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 -l 2 -d\n", argv[0]);
-        printf("-m      monitor interface to inject packets\n");
-        printf("-i      IP to listen for UDP packets\n");
-        printf("-p      port to listen for UDP packets\n");
-        printf("-l      log level 2(CRIT) - 7(DEBUG).  default 6(INFO)\n");
-        printf("-d      daemonize.  default false.  currently not implemented\n");
+        printf("example: %s -m mon0 [-i 127.0.0.1] [-p 2400] [-l 2] -d\n", argv[0]);
+        printf("-m      monitor interface to inject packets. required\n");
+        printf("-i      IP to listen for UDP packets. default 127.0.0.1\n");
+        printf("-p      port to listen for UDP packets. default 2400\n");
+        printf("-l      log level 2(CRIT) - 7(DEBUG). default 3(ERROR)\n");
+        printf("-d      daemonize.  default false. currently not implemented\n");
+        LOG_ERR("Invalid command line options.");
         return 1;
     }
     
@@ -165,7 +178,6 @@ int main(int argc, char **argv) {
     }
 
     servaddr.sin_family = AF_INET;
-    //servaddr.sin_addr.s_addr = inet_addr(argv[2]);
     servaddr.sin_addr = myopts.daddr;
     servaddr.sin_port = htons(myopts.dport);
 
@@ -182,7 +194,7 @@ int main(int argc, char **argv) {
     if (rsize != 0)
     {
         LOG_ERR("Error binding to %s:%i", inet_ntoa(myopts.daddr), myopts.dport);
-        return 6;
+        return 5;
     }
 
     //register signals
@@ -196,24 +208,29 @@ int main(int argc, char **argv) {
         LOG_ERR("Error occurred setting the SIGTERM handler");
         return 6;
     }
+    if (signal(SIGHUP, sig_handler) == SIG_ERR)
+    {
+        LOG_ERR("Error occurred setting the SIGHUP handler");
+        return 6;
+    }
 
     while (CONTINUE_PROCESSING)
     {
         rsize = recvmsg(sockfd, &message, 0);
         if (rsize < 2) { 
-            //LOG_INF("Received size (%i) too small to process header", rsize);
+            LOG_DBG("Received size (%i) too small to process header", rsize);
             continue; 
         }
     
         dhdr = (struct duples_header *)buffr;
         if (rsize < dhdr->hdr_size) { 
-            LOG_INF("Received size smaller than expected header size (%i)", dhdr->hdr_size);
+            LOG_DBG("Received size smaller than expected header size (%i)", dhdr->hdr_size);
             continue; 
         }
         
         total_size = dhdr->hdr_size + ntohs(dhdr->pload_size);
         if (rsize < total_size) { 
-            LOG_INF("Total size smaller than expected size (%i)", total_size);
+            LOG_DBG("Total size smaller than expected size (%i)", total_size);
             continue;
         }
 
@@ -236,6 +253,7 @@ int main(int argc, char **argv) {
     }
 
     /* cleanup and exit */
+    LOG_INF("Cleaning up and shutting down");
     ifctrl_finish();
     uwifi_fini(iface);
     free(iface);
@@ -246,9 +264,9 @@ int main(int argc, char **argv) {
 void __attribute__ ((format (printf, 2, 3)))
 log_out(enum loglevel ll, const char *fmt, ...)
 {
+    va_list args;
     if (MYLL >= ll)
     {
-        va_list args;
         va_start(args, fmt);
         switch (ll)
         {

@@ -15,7 +15,6 @@ struct duples_header
     unsigned char           pload_type;     //payload type
     uint16_t                pload_size;     //payload size e.g. sizeof(struct uwifi_packet);
     uint16_t                pad0;           //padding/reserved
-    struct timeval          cap_ts;         //timestamp of capture e.g. pcap's timestamp
 };
 
 #endif

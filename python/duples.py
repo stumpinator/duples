@@ -34,8 +34,7 @@ def duples_packet_thread(sock, logq, active, pktfilter):
     logq.close()
 
 class DuplesHeader:
-    hdr_structs = { (1,16):struct.Struct(">bb?bHxxLL"), \
-                    (1,24):struct.Struct(">bb?bHxxQQ") } #header structs indexed by version and size
+    hdr_structs = { (1,8):struct.Struct(">bb?bHxx") } #header structs indexed by version and size
     DUPLES_PAYLOAD_RAW = 0
     DUPLES_PAYLOAD_UWIFI = 1
     DUPLES_PAYLOAD_RTAP = 2
@@ -45,8 +44,6 @@ class DuplesHeader:
         self.LE_SRC = None
         self.PLOAD_TYPE = None
         self.PLOAD_SIZE = None
-        self.TV_SEC = None
-        self.TV_USEC = None
         if data is not None:
             self.parsedata(data)
 
@@ -64,16 +61,14 @@ class DuplesHeader:
         if len(data) < hsz:
             raise Exception(f"Expected header is too small.  Expected > {hsz} Received {len(data)}")
         
-        self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC = hdrstruct.unpack_from(data)
+        self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE = hdrstruct.unpack_from(data)
     
-    def setvalues(self, hdr_ver=1, hdr_size=16, le=False, ptype=0, psize=0, tvsec=0, tvusec=0):
+    def setvalues(self, hdr_ver=1, hdr_size=16, le=False, ptype=0, psize=0):
         self.HDR_VER = hdr_ver
         self.HDR_SIZE = hdr_size
         self.LE_SRC = le
         self.PLOAD_TYPE = ptype
         self.PLOAD_SIZE = psize
-        self.TV_SEC = tvsec
-        self.TV_USEC = tvusec
         
     def build(self):
         hdrstruct = self.hdr_structs.get((self.HDR_VER,self.HDR_SIZE),None)
@@ -81,7 +76,7 @@ class DuplesHeader:
         if hdrstruct is None:
             raise Exception(f"Invalid header or uknown header type. Header version {self.HDR_VER} size {self.HDR_SIZE}")
 
-        return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE, self.TV_SEC, self.TV_USEC)
+        return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE)
 
 class UwifiPacket:
     uwifi_structs = { (True, DuplesHeader.DUPLES_PAYLOAD_UWIFI, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
