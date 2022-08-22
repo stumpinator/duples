@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        if (dhdr->pload_type != DUPLES_PAYLOAD_RAW)
+        if (dhdr->pload_type != DUPLES_PAYLOAD_RTAP)
         {
             LOG_ERR("Received invalid payload type %i", dhdr->pload_type);
             continue;

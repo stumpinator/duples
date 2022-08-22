@@ -8,7 +8,8 @@
 
 #define DUPLES_PAYLOAD_RAW          0
 #define DUPLES_PAYLOAD_UWIFI        1
-#define DUPLES_PAYLOAD_STATIONS     2
+#define DUPLES_PAYLOAD_RTAP         2
+#define DUPLES_PAYLOAD_STATIONS     3
 
 #define DUPLES_MAX_STATIONS         64
 
