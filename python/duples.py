@@ -1,9 +1,17 @@
 import struct
+import binascii
 from duples_structs import DuplesStructs as structs
 from duples_defs import DuplesDefs as defs
 
 
 MAC_FORMAT = "%02x:%02x:%02x:%02x:%02x:%02x"
+
+
+def bytes_to_mac(mac: bytes):
+    return MAC_FORMAT % structs.macaddr.unpack(mac)
+
+def mac_to_bytes(mac: str):
+    binascii.unhexlify(mac.replace(':',''))
 
 
 class DuplesHeader:
@@ -27,9 +35,6 @@ class DuplesHeader:
         if hdrstruct is None:
             raise Exception(f"Invalid header or uknown header type. Header version {hver} size {hsz}")
 
-        if len(data) < hsz:
-            raise Exception(f"Expected header is too small.  Expected > {hsz} Received {len(data)}")
-        
         self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE = hdrstruct.unpack_from(data)
     
     def pack(self) -> bytes:
@@ -49,7 +54,6 @@ class StationInfo:
     _sta_info: struct.Struct
     _le: bool
 
-    # binascii.unhexlify('d4:6e:0e:b2:4e:b9'.replace(':',''))
     def __init__(self, little_endian=True, data=None):
         self.mac = None
         self.rssi = None
@@ -64,40 +68,36 @@ class StationInfo:
         if data is not None:
             self.unpack(data)
 
-    def unpack(self, data):
-        if len(data) != self._sta_info.size:
-            raise Exception(f"Unexpected data size. Got {len(data)}, expected {self._sta_info.size}")
+    def packed_size(self):
+        return self._sta_info.size
 
-        self.mac, self.rssi, self.rssi_avg, self.last = self._sta_info.unpack_from(data)
+    def unpack(self, data):
+        self.mac, self.rssi, self.rssi_avg, self.last = self._sta_info.unpack(data)
+
+    def unpack_from(self, data, offset: int=0):
+        self.mac, self.rssi, self.rssi_avg, self.last = self._sta_info.unpack_from(data, offset)
 
     def pack(self) -> bytes:
         return self._sta_info.pack(self.mac, self.rssi, self.rssi_avg, self.last)
 
     def to_dict(self) -> dict:
-        return dict(MAC=MAC_FORMAT % structs.macaddr.unpack(self.mac),
+        return dict(MAC=bytes_to_mac(self.mac),
                     RSSI=self.rssi,
                     RSSI_AVG=self.rssi_avg,
                     Last=self.last)
 
 
 class StationsPacket:
-    # b'\x01\x08\x01\x02\x00\x24\x00\x00'
-    #   |                               |
-    # b'\xd4\xd2\x52\x5d\xba\xba\x00\x00\x85\x09\x00\x00\x02\x00\x00\x00\x85\x09\x00\x00\x01\x00\x00\x00\xd4\x6e\x0e\xb2\x4e\xb9\xf3\xed\xe8\x03\x00\x00'
-    mac: str
-    freq: int
-    width: int
-    center: int
-    station_count: int
-    stations: list
+    mac: bytes = None
+    freq: int = 0
+    width: int = 0
+    center: int = 0
+    station_count: int = 0
+    stations: list = list()
     _duples_stations: struct.Struct
     _le: bool
+    
     def __init__(self, little_endian: bool=True, data=None):
-        self.mac = None
-        self.freq = None
-        self.width = None
-        self.center = None
-        self.stations = list()
         self._le = little_endian
 
         self._duples_stations = structs.duples_stations.get(self._le, None)
@@ -105,22 +105,34 @@ class StationsPacket:
             raise Exception(f"Invalid little endian flag: {self._le}")
         
         if data is not None:
-            self.unpack(data)
+            self.unpack_from(data)
 
-    def unpack(self, data):
-        size = self._duples_stations.size
-        if len(data) < size:
-            raise Exception(f"Unexpected data size. Got {len(data)}, expected {size}")
+    def packed_size(self):
+        sta_inf = structs.sta_info.get(self._le)
+        return self._duples_stations.size + (self.station_count * sta_inf.size)
 
-        self.mac, self.freq, self.width, self.center, self.station_count = self._duples_stations.unpack_from(data)
+    def unpack_from(self, data, offset: int=0):
+        self.mac, self.freq, self.width, self.center, self.station_count = self._duples_stations.unpack_from(data, offset)
+        if self.station_count <= 0:
+            return
         
-        sta_info = structs.sta_info.get(self._le, None)
-        if (size + (sta_info.size * self.station_count)) > len(data):
-            raise Exception(f"Data too small for {self.station_count} stations")
-        
-        for i in range(0, self.station_count):
-            si = sta_info.unpack_from(data, size + (i * sta_info.size))
+        offset = self._duples_stations.size
+        while (offset < len(data)):
+            si = StationInfo(self._le)
+            si.unpack_from(data, offset)
             self.stations.append(si)
+            offset += si.packed_size()
+
+        if len(self.stations) != self.station_count:
+            raise Exception(f"Expected station count {self.station_count} does not equal parsed count {len(self.stations)}")
+    
+    def to_dict(self):
+        return dict(MAC=bytes_to_mac(self.mac),
+                    Freq=self.freq,
+                    Width=defs.UWIFI_CHAN_WIDTHS.get(self.width, "UNKNOWN"),
+                    Center=self.center,
+                    StationCount=self.station_count,
+                    Stations=list(x.to_dict() for x in self.stations))
 
 
 class UwifiPacket:
