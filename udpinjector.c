@@ -6,12 +6,10 @@
 #include <unistd.h>
 #include <signal.h>
 
-#include <uwifi/conf.h>
-#include <uwifi/raw_parser.h>
-#include <uwifi/log.h>
-#include <uwifi/packet_sock.h>
-#include <uwifi/wlan_parser.h>
-#include <uwifi/ifctrl.h>
+#include "uwifi/conf.h"
+#include "uwifi/log.h"
+#include "uwifi/wlan_parser.h"
+#include "uwifi/ifctrl.h"
 
 #include "duples.h"
 
@@ -234,7 +232,7 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        if (dhdr->pload_type != DUPLES_PAYLOAD_RTAP)
+        if (dhdr->pload_type != DUPLES_PAYLOAD_RAW)
         {
             LOG_ERR("Received invalid payload type %i", dhdr->pload_type);
             continue;
