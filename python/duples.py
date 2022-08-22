@@ -1,59 +1,28 @@
-import socket
-import sys
 import struct
+from duples_structs import DuplesStructs as structs
+from duples_defs import DuplesDefs as defs
 
-import multiprocessing as mp
-import signal
 
-def duples_packet_thread(sock, logq, active, pktfilter):
-    while active.is_set():
-        try:
-            data, ancdata, msg_flags, address = sock.recvmsg(4096)
-        except:
-            continue
+MAC_FORMAT = "%02x:%02x:%02x:%02x:%02x:%02x"
 
-        try:        
-            rshdr = DuplesHeader(data)
-            if rshdr.PLOAD_TYPE == DuplesHeader.DUPLES_PAYLOAD_UWIFI:
-                rspkt = UwifiPacket(rshdr.LE_SRC, rshdr.PLOAD_TYPE, rshdr.PLOAD_SIZE, data[rshdr.HDR_SIZE:])
-            else:
-                continue
-        except Exception as e:
-            print(f"Exception occured parsing packet: {str(e)}")
-            continue
-        
-        if not pktfilter(rspkt):
-            continue
-        
-        try:
-            logq.put_nowait(rspkt)
-        except:
-            pass
-
-    logq.cancel_join_thread()
-    logq.close()
 
 class DuplesHeader:
-    hdr_structs = { (1,8):struct.Struct(">bb?bHxx") } #header structs indexed by version and size
-    DUPLES_PAYLOAD_RAW = 0
-    DUPLES_PAYLOAD_UWIFI = 1
-    DUPLES_PAYLOAD_RTAP = 2
     def __init__(self, data=None):
-        self.HDR_VER = None
-        self.HDR_SIZE = None
-        self.LE_SRC = None
-        self.PLOAD_TYPE = None
-        self.PLOAD_SIZE = None
+        self.HDR_VER = 1
+        self.HDR_SIZE = 16
+        self.LE_SRC = False
+        self.PLOAD_TYPE = 0
+        self.PLOAD_SIZE = 0
         if data is not None:
-            self.parsedata(data)
+            self.unpack(data)
 
-    def parsedata(self, data):
+    def unpack(self, data):
         if len(data) < 2:
             raise Exception(f"Expected data is too small.")
         
         hver = data[0]
         hsz = data[1]
-        hdrstruct = self.hdr_structs.get((hver,hsz),None)
+        hdrstruct = structs.duples_header.get((hver,hsz),None)
 
         if hdrstruct is None:
             raise Exception(f"Invalid header or uknown header type. Header version {hver} size {hsz}")
@@ -63,61 +32,109 @@ class DuplesHeader:
         
         self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE = hdrstruct.unpack_from(data)
     
-    def setvalues(self, hdr_ver=1, hdr_size=16, le=False, ptype=0, psize=0):
-        self.HDR_VER = hdr_ver
-        self.HDR_SIZE = hdr_size
-        self.LE_SRC = le
-        self.PLOAD_TYPE = ptype
-        self.PLOAD_SIZE = psize
-        
-    def build(self):
-        hdrstruct = self.hdr_structs.get((self.HDR_VER,self.HDR_SIZE),None)
+    def pack(self) -> bytes:
+        hdrstruct = structs.duples_header.get((self.HDR_VER,self.HDR_SIZE),None)
 
         if hdrstruct is None:
             raise Exception(f"Invalid header or uknown header type. Header version {self.HDR_VER} size {self.HDR_SIZE}")
 
         return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE)
 
-class UwifiPacket:
-    uwifi_structs = { (True, DuplesHeader.DUPLES_PAYLOAD_UWIFI, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
-                    (False, DuplesHeader.DUPLES_PAYLOAD_UWIFI, 168):struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
-    macaddr_struct = struct.Struct("BBBBBB")
-    macaddr_format = "%02x:%02x:%02x:%02x:%02x:%02x"
-    
-    WLAN_FRAME_FC_TYPE_MASK = 0x0C
-    WLAN_FRAME_FC_STYPE_MASK = 0xF0
-    WLAN_FRAME_FC_MASK = WLAN_FRAME_FC_TYPE_MASK | WLAN_FRAME_FC_STYPE_MASK
-    WLAN_FRAME_TYPES = { "MGMT":0,0:"MGMT", "CTRL":1,1:"CTRL", "DATA":2,2:"DATA", "EXTE":3,3:"EXTE" }
-    WLAN_FRAME_TYPES_MGMT = {"ASSOC_REQ":0,0:"ASSOC_REQ", "ASSOC_RESP":1,1:"ASSOC_RESP",\
-                            "REASSOC_REQ":2,2:"REASSOC_REQ", "REASSOC_RESP":3,3:"REASSOC_RESP",\
-                            "PROBE_REQ":4,4:"PROBE_REQ", "PROBE_RESP":5,5:"PROBE_RESP", "TIMING":6,6:"TIMING",\
-                            "BEACON":8,8:"BEACON", "ATIM":9,9:"ATIM", "DISASSOC":10,10:"DISASSOC", "AUTH":11,11:"AUTH",\
-                            "DEAUTH":12,12:"DEAUTH", "ACTION":13, 13:"ACTION", "ACTION_NOACK":14, 14:"ACTION_NOACK"}
-    WLAN_FRAME_TYPES_CTRL = {"BEAM_REP":4,4:"BEAM_REP", "VHT_NDP":5,5:"VHT_NDP", "CTRL_EXT":6,6:"CTRL_EXT", \
-                            "CTRL_WRAP":7,7:"CTRL_WRAP", "BLKACK_REQ":8,8:"BLKACK_REQ", "BLKACK":9,9:"BLKACK", \
-                            "PSPOLL":10,10:"PSPOLL", "RTS":11,11:"RTS", "CTS":12,12:"CTS", "ACK":13,13:"ACK", \
-                            "CF_END":14,14:"CF_END", "CF_END_ACK":15,15:"CF_END_ACK"}
-    WLAN_FRAME_TYPES_DATA = {"DATA":0,0:"DATA", "DATA_CF_ACK":1,1:"DATA_CF_ACK", "DATA_CF_POLL":2,2:"DATA_CF_POLL",\
-                            "DATA_CF_ACKPOLL":3,3:"DATA_CF_ACKPOLL", "NULL":4,4:"NULL", "CF_ACK":5,5:"CF_ACK",\
-                            "CF_POLL":6,6:"CF_POLL", "CF_ACKPOLL":7,7:"CF_ACKPOLL", "QDATA":8,8:"QDATA",\
-                            "QDATA_CF_ACK":9,9:"QDATA_CF_ACK", "QDATA_CF_POLL":10,10:"QDATA_CF_POLL",\
-                            "QDATA_CF_ACKPOLL":11,11:"QDATA_CF_ACKPOLL", "QOS_NULL":12,12:"QOS_NULL",\
-                            "QOS_CF_POLL":14,14:"QOS_CF_POLL", "QOS_CF_ACKPOLL":15,15:"QOS_CF_ACKPOLL"}
-    WLAN_FRAME_TYPES_EXTE = { } #"DMG_BEACON":0,0:"DMG_BEACON"}
-    WLAN_FLAGS_BITS = {"wep":0,0:"wep", "retry":1,1:"retry", "wpa":2,2:"wpa", "rsn":3,3:"rsn", "ht40plus":4,4:"ht40plus"}
-    PHY_FLAGS_BITS = {"shortpre":0,0:"shortpre", "badfcs":1,1:"badfcs", "a":2,2:"a", "b":3,3:"b", "g":4,4:"g"}
-    WLAN_MODE_BITS = {"AP":0,0:"AP", "IBSS":1,1:"IBSS", "STA":2,2:"STA", "PROBE":3,3:"PROBE", "4ADDR":4,4:"4ADDR",\
-                    "UNKNOWN":5,5:"UNKNOWN"}
 
-    def __init__(self, little_endian, payload_type, payload_size, data=None):
+class StationInfo:
+    mac: bytes
+    rssi: int
+    rssi_avg: int
+    last: int
+    _sta_info: struct.Struct
+    _le: bool
+
+    # binascii.unhexlify('d4:6e:0e:b2:4e:b9'.replace(':',''))
+    def __init__(self, little_endian=True, data=None):
+        self.mac = None
+        self.rssi = None
+        self.rssi_avg = None
+        self.last = None
+        self._le = little_endian
+
+        self._sta_info = structs.sta_info.get(self._le, None)
+        if self._sta_info is None:
+            raise Exception(f"Invalid little endian flag: {self._le}")
+
+        if data is not None:
+            self.unpack(data)
+
+    def unpack(self, data):
+        if len(data) != self._sta_info.size:
+            raise Exception(f"Unexpected data size. Got {len(data)}, expected {self._sta_info.size}")
+
+        self.mac, self.rssi, self.rssi_avg, self.last = self._sta_info.unpack_from(data)
+
+    def pack(self) -> bytes:
+        return self._sta_info.pack(self.mac, self.rssi, self.rssi_avg, self.last)
+
+    def to_dict(self) -> dict:
+        return dict(MAC=MAC_FORMAT % structs.macaddr.unpack(self.mac),
+                    RSSI=self.rssi,
+                    RSSI_AVG=self.rssi_avg,
+                    Last=self.last)
+
+
+class StationsPacket:
+    # b'\x01\x08\x01\x02\x00\x24\x00\x00'
+    #   |                               |
+    # b'\xd4\xd2\x52\x5d\xba\xba\x00\x00\x85\x09\x00\x00\x02\x00\x00\x00\x85\x09\x00\x00\x01\x00\x00\x00\xd4\x6e\x0e\xb2\x4e\xb9\xf3\xed\xe8\x03\x00\x00'
+    mac: str
+    freq: int
+    width: int
+    center: int
+    station_count: int
+    stations: list
+    _duples_stations: struct.Struct
+    _le: bool
+    def __init__(self, little_endian: bool=True, data=None):
+        self.mac = None
+        self.freq = None
+        self.width = None
+        self.center = None
+        self.stations = list()
+        self._le = little_endian
+
+        self._duples_stations = structs.duples_stations.get(self._le, None)
+        if self._duples_stations is None:
+            raise Exception(f"Invalid little endian flag: {self._le}")
+        
+        if data is not None:
+            self.unpack(data)
+
+    def unpack(self, data):
+        size = self._duples_stations.size
+        if len(data) < size:
+            raise Exception(f"Unexpected data size. Got {len(data)}, expected {size}")
+
+        self.mac, self.freq, self.width, self.center, self.station_count = self._duples_stations.unpack_from(data)
+        
+        sta_info = structs.sta_info.get(self._le, None)
+        if (size + (sta_info.size * self.station_count)) > len(data):
+            raise Exception(f"Data too small for {self.station_count} stations")
+        
+        for i in range(0, self.station_count):
+            si = sta_info.unpack_from(data, size + (i * sta_info.size))
+            self.stations.append(si)
+
+
+class UwifiPacket:
+    _le: bool
+    def __init__(self, little_endian: bool, payload_size, data=None):
         self._SSID = None
         self._TA_MACADDR = None
         self._RA_MACADDR = None
         self._BSSID_MACADDR = None
         self._FC_TYPE = None
         self._FC_STYPE = None
+        self._le = little_endian
         if data is not None:
-            self.parsedata(little_endian, payload_type, payload_size, data)
+            self.unpack(payload_size, data)
     
     def TA(self):
         if self._TA_MACADDR is None:
@@ -151,26 +168,26 @@ class UwifiPacket:
         return self.ESSID()
 
     def format_mac(self, macdata):
-        return self.macaddr_format % self.macaddr_struct.unpack(macdata)
+        return MAC_FORMAT % structs.macaddr.unpack(macdata)
 
     def TYPE_ENUM(self):
         if self._FC_TYPE is None:
             fc = self.__dict__.get('wlan_type', None)
             if fc is not None:
-                self._FC_TYPE = (fc & self.WLAN_FRAME_FC_TYPE_MASK) >> 2
+                self._FC_TYPE = (fc & defs.WLAN_FRAME_FC_TYPE_MASK) >> 2
         return self._FC_TYPE
 
     def TYPE(self):
         t = self.TYPE_ENUM()
         if t is not None:
-            t = self.WLAN_FRAME_TYPES.get(t, None)
+            t = defs.WLAN_FRAME_TYPES.get(t, None)
         return t
         
     def SUBTYPE_ENUM(self):
         if self._FC_STYPE is None:
             fc = self.__dict__.get('wlan_type', None)
             if fc is not None:
-                self._FC_STYPE = (fc & self.WLAN_FRAME_FC_STYPE_MASK) >> 4
+                self._FC_STYPE = (fc & defs.WLAN_FRAME_FC_STYPE_MASK) >> 4
         return self._FC_STYPE
 
     def SUBTYPE(self):
@@ -178,23 +195,23 @@ class UwifiPacket:
         if st is not None:
             t = self.TYPE_ENUM()
             if t is not None:
-                if t == self.WLAN_FRAME_TYPES["MGMT"]: 
-                    st = self.WLAN_FRAME_TYPES_MGMT.get(st, "RESERVED")
-                elif t == self.WLAN_FRAME_TYPES["CTRL"]:
-                    st = self.WLAN_FRAME_TYPES_CTRL.get(st, "RESERVED")
-                elif t == self.WLAN_FRAME_TYPES["DATA"]:
-                    st = self.WLAN_FRAME_TYPES_DATA.get(st, "RESERVED")
-                elif t == self.WLAN_FRAME_TYPES["EXTE"]:
-                    st = self.WLAN_FRAME_TYPES_EXTE.get(st, "UNKNOWN")
+                if t == defs.WLAN_FRAME_TYPES["MGMT"]: 
+                    st = defs.WLAN_FRAME_TYPES_MGMT.get(st, "RESERVED")
+                elif t == defs.WLAN_FRAME_TYPES["CTRL"]:
+                    st = defs.WLAN_FRAME_TYPES_CTRL.get(st, "RESERVED")
+                elif t == defs.WLAN_FRAME_TYPES["DATA"]:
+                    st = defs.WLAN_FRAME_TYPES_DATA.get(st, "RESERVED")
+                elif t == defs.WLAN_FRAME_TYPES["EXTE"]:
+                    st = defs.WLAN_FRAME_TYPES_EXTE.get(st, "UNKNOWN")
         return st
 
-    def parsedata(self, little_endian, payload_type, payload_size, data):
+    def unpack(self, payload_size, data):
         if len(data) < payload_size:
             raise Exception(f"Expected data is too small.  Expected >= {payload_size} Received {len(data)}")
         
-        uwstruct = self.uwifi_structs.get((little_endian, payload_type, payload_size), None)
+        uwstruct = structs.uwifi_pkt.get((self._le, payload_size), None)
         if uwstruct is None:
-            raise Exception(f"Error: no struct definition for endian/version/size combination {little_endian}/{payload_type}/{payload_size}")
+            raise Exception(f"Error: no struct definition for endian/size combination {self._le}/{payload_size}")
 
         self.pkt_types, self.phy_signal, self.phy_rate, self.phy_rate_idx, self.phy_rate_flags, self.phy_freq, \
         self.phy_flags, self.phy_injected, self.wlan_len, self.wlan_fromds, self.wlan_tods, self.wlan_type, \
@@ -212,92 +229,14 @@ class UwifiPacket:
         return (ff >> fe) & 1
 
     def WLANFLAG(self, flag):
-        return self.FLAGWITHBITS(flag, 'wlan_flags', self.WLAN_FLAGS_BITS)
+        return self.FLAGWITHBITS(flag, 'wlan_flags', defs.WLAN_FLAGS_BITS)
         
     def PHYFLAG(self, flag):
-        return self.FLAGWITHBITS(flag, 'phy_flags', self.PHY_FLAGS_BITS)
+        return self.FLAGWITHBITS(flag, 'phy_flags', defs.PHY_FLAGS_BITS)
             
     def WLANMODE(self, flag):
-        return self.FLAGWITHBITS(flag, 'wlan_mode', self.WLAN_MODE_BITS)
+        return self.FLAGWITHBITS(flag, 'wlan_mode', defs.WLAN_MODE_BITS)
         
-class DuplesUDPReceiver:
-    def __init__(self):
-        self.childprocs = list()
-        self.listen_sock = None
-        self.server_address = None
-        self.filterfunc = None
-        self.log_queue = mp.Queue()
-        self.log_queue.cancel_join_thread()
-        self.initialized = False
-        self.active = mp.Event()
 
-    def initialize(self, ip, port, timeout=0.5, parsers=4, pktfilter=None, pktthread=duples_packet_thread):
-        assert type(timeout) is float, f"Invalid timeout ({timeout}).  Must be float type."
-        assert type(parsers) is int, f"Invalid parsers ({parsers}).  Must be int type."
-        assert parsers > 0, "Parsers must be at least 1."
-        if pktfilter is None:
-            self.filterfunc = lambda x: True
-        else:
-            self.filterfunc = pktfilter
-        assert callable(self.filterfunc), "pktfilter must be a callable function."
-        assert callable(pktthread), "pktthread must be a callable function."
-        assert not self.active.is_set(), "This class is currently active."
-
-        self.listen_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.server_address = (ip, port)
-        self.listen_sock.bind(self.server_address)
-        self.listen_sock.settimeout(timeout)
-
-        self.childprocs.clear()
-        for i in range(0, parsers):
-            pktp = mp.Process(target=pktthread, args=(self.listen_sock, self.log_queue, self.active, self.filterfunc))
-            pktp.daemon = True
-            self.childprocs.append(pktp)
-        
-        self.initialized = True
-
-    def startprocessing(self):
-        assert self.initialized, "Receiver is not initialized."
-        assert not self.active.is_set(), "This class is currently active"
-        self.active.set()
-        for p in self.childprocs:
-            p.start()
-
-    def stopprocessing(self):
-        self.active.clear()
-        
-        #print("Shutting down subproccesses")
-        for p in self.childprocs:
-            if p.is_alive():
-                p.terminate()
-    
-        #print("Joining subprocesses")
-        for p in self.childprocs:
-            p.join()
-
-        self.listen_sock.close()
-        self.childprocs.clear()
-        self.initialized = False
-
-class DuplesUDPSender:
-    DEF_RTAP = b'\x00\x00\x08\x00\x00\x00\x00\x00'
-    def __init__(self, ip, port):
-        self.dest_ip = ip
-        self.dest_port = port
-        self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.header = DuplesHeader()
-        self.header.setvalues()
-    
-    def send(self, data, addradiotap=False, ptype=DuplesHeader.DUPLES_PAYLOAD_RTAP):
-        assert type(ptype) is int, f"Invalid packet type ({ptype}).  Must be int type."
-        if addradiotap:
-            pload = DEF_RTAP + bytes(data)
-        else:
-            pload = bytes(data)
-        self.header.PLOAD_SIZE = len(pload)
-        self.header.PLOAD_TYPE = ptype
-        packet = self.header.build() + pload
-        self.send_socket.sendto(packet, (self.dest_ip, self.dest_port))
-        
 if __name__ == "__main__":
     pass
