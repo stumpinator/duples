@@ -101,9 +101,9 @@ class DuplesUDPReceiver:
 
             try:        
                 header = DuplesHeader(data)
-                if header.PLOAD_TYPE == defs.DUPLES_PAYLOAD_UWIFI:
-                    packet = UwifiPacket(header.LE_SRC, header.PLOAD_TYPE, header.PLOAD_SIZE, data[header.HDR_SIZE:])
-                elif header.PLOAD_TYPE == defs.DUPLES_PAYLOAD_STATIONS:
+                if header.pload_type == defs.DUPLES_PAYLOAD_UWIFI:
+                    packet = UwifiPacket(header.le_src, header.pload_type, header.pload_size, data[header.hdr_size:])
+                elif header.pload_type == defs.DUPLES_PAYLOAD_STATIONS:
                     continue
                 else:
                     continue
@@ -137,8 +137,8 @@ class DuplesUDPSender:
             pload = self.DEF_RTAP + bytes(data)
         else:
             pload = bytes(data)
-        self.header.PLOAD_SIZE = len(pload)
-        self.header.PLOAD_TYPE = ptype
+        self.header.pload_size = len(pload)
+        self.header.pload_type = ptype
         packet = self.header.pack() + pload
         self.send_socket.sendto(packet, (self.dest_ip, self.dest_port))
 

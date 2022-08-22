@@ -15,12 +15,12 @@ def mac_to_bytes(mac: str):
 
 
 class DuplesHeader:
+    hdr_version: int = 1
+    hdr_size: int = 16
+    le_src: bool = False
+    pload_type: int = 0
+    pload_size: int = 0
     def __init__(self, data=None):
-        self.HDR_VER = 1
-        self.HDR_SIZE = 16
-        self.LE_SRC = False
-        self.PLOAD_TYPE = 0
-        self.PLOAD_SIZE = 0
         if data is not None:
             self.unpack(data)
 
@@ -35,15 +35,22 @@ class DuplesHeader:
         if hdrstruct is None:
             raise Exception(f"Invalid header or uknown header type. Header version {hver} size {hsz}")
 
-        self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE = hdrstruct.unpack_from(data)
+        self.hdr_version, self.hdr_size, self.le_src, self.pload_type, self.pload_size = hdrstruct.unpack_from(data)
     
     def pack(self) -> bytes:
-        hdrstruct = structs.duples_header.get((self.HDR_VER,self.HDR_SIZE),None)
+        hdrstruct = structs.duples_header.get((self.hdr_version,self.hdr_size),None)
 
         if hdrstruct is None:
-            raise Exception(f"Invalid header or uknown header type. Header version {self.HDR_VER} size {self.HDR_SIZE}")
+            raise Exception(f"Invalid header or uknown header type. Header version {self.hdr_version} size {self.hdr_size}")
 
-        return hdrstruct.pack(self.HDR_VER, self.HDR_SIZE, self.LE_SRC, self.PLOAD_TYPE, self.PLOAD_SIZE)
+        return hdrstruct.pack(self.hdr_version, self.hdr_size, self.le_src, self.pload_type, self.pload_size)
+    
+    def to_dict(self) -> dict:
+        return dict(hdr_version=self.hdr_version,
+                    hdr_size=self.hdr_size,
+                    le_src=self.le_src,
+                    pload_type=self.pload_type,
+                    pload_size=self.pload_size)
 
 
 class StationInfo:
@@ -81,10 +88,10 @@ class StationInfo:
         return self._sta_info.pack(self.mac, self.rssi, self.rssi_avg, self.last)
 
     def to_dict(self) -> dict:
-        return dict(MAC=bytes_to_mac(self.mac),
-                    RSSI=self.rssi,
-                    RSSI_AVG=self.rssi_avg,
-                    Last=self.last)
+        return dict(mac=bytes_to_mac(self.mac),
+                    rssi=self.rssi,
+                    rssi_avg=self.rssi_avg,
+                    last=self.last)
 
 
 class StationsPacket:
@@ -127,12 +134,12 @@ class StationsPacket:
             raise Exception(f"Expected station count {self.station_count} does not equal parsed count {len(self.stations)}")
     
     def to_dict(self):
-        return dict(MAC=bytes_to_mac(self.mac),
-                    Freq=self.freq,
-                    Width=defs.UWIFI_CHAN_WIDTHS.get(self.width, "UNKNOWN"),
-                    Center=self.center,
-                    StationCount=self.station_count,
-                    Stations=list(x.to_dict() for x in self.stations))
+        return dict(mac=bytes_to_mac(self.mac),
+                    freq=self.freq,
+                    width=defs.UWIFI_CHAN_WIDTHS.get(self.width, "UNKNOWN"),
+                    center=self.center,
+                    station_count=self.station_count,
+                    stations=list(x.to_dict() for x in self.stations))
 
 
 class UwifiPacket:
