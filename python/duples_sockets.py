@@ -102,9 +102,11 @@ class DuplesUDPReceiver:
             try:        
                 header = DuplesHeader(data)
                 if header.pload_type == defs.DUPLES_PAYLOAD_UWIFI:
-                    packet = UwifiPacket(header.le_src, header.pload_type, header.pload_size, data[header.hdr_size:])
+                    packet = UwifiPacket(header.le_src)
+                    packet.unpack_from(data, header.hdr_size)
                 elif header.pload_type == defs.DUPLES_PAYLOAD_STATIONS:
-                    continue
+                    packet = StationsPacket(header.le_src)
+                    packet.unpack_from(data, header.hdr_size)
                 else:
                     continue
             except Exception as e:
