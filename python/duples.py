@@ -61,7 +61,7 @@ class StationInfo:
     _sta_info: struct.Struct
     _le: bool
 
-    def __init__(self, little_endian=True, data=None):
+    def __init__(self, little_endian: bool=True, data=None):
         self.mac = None
         self.rssi = None
         self.rssi_avg = None
@@ -143,76 +143,111 @@ class StationsPacket:
 
 
 class UwifiPacket:
+    wlan_ta: bytes = None
+    wlan_ra: bytes = None
+    wlan_bssid: bytes = None
+    wlan_essid: bytes = None
+    wlan_type: int = None
+    wlan_flags: int = None
+    phy_flags: int = None
+    wlan_mode: int = None
+    _TA_MACADDR: str = None
+    _RA_MACADDR: str = None
+    _BSSID_MACADDR: str = None
+    _SSID: str = None
+    _FC_TYPE: int = None
+    _FC_STYPE: int = None
     _le: bool
-    def __init__(self, little_endian: bool, payload_size, data=None):
-        self._SSID = None
-        self._TA_MACADDR = None
-        self._RA_MACADDR = None
-        self._BSSID_MACADDR = None
-        self._FC_TYPE = None
-        self._FC_STYPE = None
-        self._le = little_endian
-        if data is not None:
-            self.unpack(payload_size, data)
+    _uwifi_pkt: struct.Struct
     
+    def __init__(self, little_endian: bool=True, data=None):
+        self._le = little_endian
+
+        self._uwifi_pkt = structs.uwifi_pkt.get(self._le, None)
+        if self._uwifi_pkt is None:
+            raise Exception(f"Invalid little endian flag: {self._le}")
+
+        if data is not None:
+            self.unpack(data)
+    
+    def unpack_from(self, data, offset: int=0):
+        self.pkt_types, self.phy_signal, self.phy_rate, self.phy_rate_idx, self.phy_rate_flags, self.phy_freq, \
+        self.phy_flags, self.phy_injected, self.wlan_len, self.wlan_fromds, self.wlan_tods, self.wlan_type, \
+        self.wlan_ta, self.wlan_ra, self.wlan_bssid, self.wlan_essid, self.wlan_tsf, self.wlan_bintval, self.wlan_mode, \
+        self.wlan_channel, self.wlan_chan_width, self.wlan_tx_streams, self.wlan_rx_streams, self.wlan_qos_class, \
+        self.wlan_nav, self.wlan_seqno, self.wlan_flags, self.bat_version, self.bat_packet_type, self.bat_gw, \
+        self.ip_src, self.ip_dst, self.tcpudp_port, self.olsr_type, self.olsr_neigh, self.olsr_tc, self.pkt_duration, \
+        self.pkt_chan_idx, self.wlan_retries = self._uwifi_pkt.unpack_from(data, offset)
+
+    def unpack(self, data):
+        self.pkt_types, self.phy_signal, self.phy_rate, self.phy_rate_idx, self.phy_rate_flags, self.phy_freq, \
+        self.phy_flags, self.phy_injected, self.wlan_len, self.wlan_fromds, self.wlan_tods, self.wlan_type, \
+        self.wlan_ta, self.wlan_ra, self.wlan_bssid, self.wlan_essid, self.wlan_tsf, self.wlan_bintval, self.wlan_mode, \
+        self.wlan_channel, self.wlan_chan_width, self.wlan_tx_streams, self.wlan_rx_streams, self.wlan_qos_class, \
+        self.wlan_nav, self.wlan_seqno, self.wlan_flags, self.bat_version, self.bat_packet_type, self.bat_gw, \
+        self.ip_src, self.ip_dst, self.tcpudp_port, self.olsr_type, self.olsr_neigh, self.olsr_tc, self.pkt_duration, \
+        self.pkt_chan_idx, self.wlan_retries = self._uwifi_pkt.unpack(data)
+
+    @property
     def TA(self):
+        # cache formatted mac address
         if self._TA_MACADDR is None:
-            mdat = self.__dict__.get('wlan_ta', None)
-            if mdat is not None:
-                self._TA_MACADDR = self.format_mac(mdat)
+            if self.wlan_ta is not None:
+                self._TA_MACADDR = bytes_to_mac(self.wlan_ta)
         return self._TA_MACADDR
     
-    def RA(self):
+    @property
+    def RA(self) -> str:
+        # cache formatted mac address
         if self._RA_MACADDR is None:
-            mdat = self.__dict__.get('wlan_ra', None)
-            if mdat is not None:
-                self._RA_MACADDR = self.format_mac(mdat)
+            if self.wlan_ra is not None:
+                self._RA_MACADDR = bytes_to_mac(self.wlan_ra)
         return self._RA_MACADDR
 
-    def BSSID(self):
+    @property
+    def BSSID(self) -> str:
+        # cache formatted mac address
         if self._BSSID_MACADDR is None:
-            mdat = self.__dict__.get('wlan_bssid', None)
-            if mdat is not None:
-                self._BSSID_MACADDR = self.format_mac(mdat)
+            if self.wlan_bssid is not None:
+                self._BSSID_MACADDR = bytes_to_mac(self.wlan_bssid)
         return self._BSSID_MACADDR
 
-    def ESSID(self):
+    @property
+    def ESSID(self) -> str:
+        # cache decoded SSID
         if self._SSID is None:
-            mdat = self.__dict__.get('wlan_essid', None)
-            if mdat is not None:
+            if self.wlan_essid is not None:
                 self._SSID = self.wlan_essid.decode(encoding='utf-8').strip()
         return self._SSID
     
-    def SSID(self):
-        return self.ESSID()
+    @property
+    def SSID(self) -> str:
+        return self.ESSID
 
-    def format_mac(self, macdata):
-        return MAC_FORMAT % structs.macaddr.unpack(macdata)
-
+    @property
     def TYPE_ENUM(self):
+        # cache calculated type
         if self._FC_TYPE is None:
-            fc = self.__dict__.get('wlan_type', None)
-            if fc is not None:
-                self._FC_TYPE = (fc & defs.WLAN_FRAME_FC_TYPE_MASK) >> 2
+            if self.wlan_type is not None:
+                self._FC_TYPE = (self.wlan_type & defs.WLAN_FRAME_FC_TYPE_MASK) >> 2
         return self._FC_TYPE
 
+    @property
     def TYPE(self):
-        t = self.TYPE_ENUM()
-        if t is not None:
-            t = defs.WLAN_FRAME_TYPES.get(t, None)
-        return t
-        
+        return defs.WLAN_FRAME_TYPES.get(self.TYPE_ENUM(), None)
+    
+    @property
     def SUBTYPE_ENUM(self):
         if self._FC_STYPE is None:
-            fc = self.__dict__.get('wlan_type', None)
-            if fc is not None:
-                self._FC_STYPE = (fc & defs.WLAN_FRAME_FC_STYPE_MASK) >> 4
+            if self.wlan_type is not None:
+                self._FC_STYPE = (self.wlan_type & defs.WLAN_FRAME_FC_STYPE_MASK) >> 4
         return self._FC_STYPE
 
+    @property
     def SUBTYPE(self):
-        st = self.SUBTYPE_ENUM()
+        st = self.SUBTYPE_ENUM
         if st is not None:
-            t = self.TYPE_ENUM()
+            t = self.TYPE_ENUM
             if t is not None:
                 if t == defs.WLAN_FRAME_TYPES["MGMT"]: 
                     st = defs.WLAN_FRAME_TYPES_MGMT.get(st, "RESERVED")
@@ -222,40 +257,25 @@ class UwifiPacket:
                     st = defs.WLAN_FRAME_TYPES_DATA.get(st, "RESERVED")
                 elif t == defs.WLAN_FRAME_TYPES["EXTE"]:
                     st = defs.WLAN_FRAME_TYPES_EXTE.get(st, "UNKNOWN")
-        return st
+                return st
+        return None
 
-    def unpack(self, payload_size, data):
-        if len(data) < payload_size:
-            raise Exception(f"Expected data is too small.  Expected >= {payload_size} Received {len(data)}")
-        
-        uwstruct = structs.uwifi_pkt.get((self._le, payload_size), None)
-        if uwstruct is None:
-            raise Exception(f"Error: no struct definition for endian/size combination {self._le}/{payload_size}")
+    def FLAGWITHBITS(self, flag, flagfield, flagbits) -> bool:
+        if isinstance(flagfield, int):
+            flagbit = flagbits.get(flag, None)
+            if isinstance(flagbit, int):
+                return ((flagfield >> flagbit) & 1) == 1
+        return False
 
-        self.pkt_types, self.phy_signal, self.phy_rate, self.phy_rate_idx, self.phy_rate_flags, self.phy_freq, \
-        self.phy_flags, self.phy_injected, self.wlan_len, self.wlan_fromds, self.wlan_tods, self.wlan_type, \
-        self.wlan_ta, self.wlan_ra, self.wlan_bssid, self.wlan_essid, self.wlan_tsf, self.wlan_bintval, self.wlan_mode, \
-        self.wlan_channel, self.wlan_chan_width, self.wlan_tx_streams, self.wlan_rx_streams, self.wlan_qos_class, \
-        self.wlan_nav, self.wlan_seqno, self.wlan_flags, self.bat_version, self.bat_packet_type, self.bat_gw, \
-        self.ip_src, self.ip_dst, self.tcpudp_port, self.olsr_type, self.olsr_neigh, self.olsr_tc, self.pkt_duration, \
-        self.pkt_chan_idx, self.wlan_retries = uwstruct.unpack_from(data)
-
-    def FLAGWITHBITS(self, flag, flagfield, flagbits):
-        ff = self.__dict__.get(flagfield, None)
-        fe = flagbits.get(flag, None)
-        if ((ff is None) or (fe is None) or (not isinstance(fe, int))):
-            return None
-        return (ff >> fe) & 1
-
-    def WLANFLAG(self, flag):
-        return self.FLAGWITHBITS(flag, 'wlan_flags', defs.WLAN_FLAGS_BITS)
-        
-    def PHYFLAG(self, flag):
-        return self.FLAGWITHBITS(flag, 'phy_flags', defs.PHY_FLAGS_BITS)
-            
-    def WLANMODE(self, flag):
-        return self.FLAGWITHBITS(flag, 'wlan_mode', defs.WLAN_MODE_BITS)
-        
+    def WLANFLAG(self, flag) -> bool:
+        return self.FLAGWITHBITS(flag, self.wlan_flags, defs.WLAN_FLAGS_BITS)
+    
+    def PHYFLAG(self, flag) -> bool:
+        return self.FLAGWITHBITS(flag, self.phy_flags, defs.PHY_FLAGS_BITS)
+    
+    def WLANMODE(self, flag) -> bool:
+        return self.FLAGWITHBITS(flag, self.wlan_mode, defs.WLAN_MODE_BITS)
+    
 
 if __name__ == "__main__":
     pass

@@ -15,8 +15,8 @@ class DuplesStructs(object):
     # macaddr_format = "%02x:%02x:%02x:%02x:%02x:%02x"
     macaddr = struct.Struct("BBBBBB")
 
-    uwifi_pkt = { (True, 168):struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
-                        (False, 168):struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
+    uwifi_pkt = { True:struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
+                False:struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
 
     uwifi_chan_freq = { True:struct.Struct("<iIibbxx"), False:struct.Struct(">iIibbxx") }
     uwifi_chan_spec = { True:struct.Struct("<IiI"), False:struct.Struct(">IiI") }
