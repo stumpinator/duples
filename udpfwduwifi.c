@@ -6,12 +6,11 @@
 #include <unistd.h>
 #include <signal.h>
 
-#include <uwifi/conf.h>
-#include <uwifi/raw_parser.h>
-#include <uwifi/log.h>
-#include <uwifi/packet_sock.h>
-#include <uwifi/wlan_parser.h>
-#include <uwifi/ifctrl.h>
+#include "uwifi/conf.h"
+#include "uwifi/raw_parser.h"
+#include "uwifi/log.h"
+#include "uwifi/wlan_parser.h"
+#include "uwifi/ifctrl.h"
 
 #include "duples.h"
 
