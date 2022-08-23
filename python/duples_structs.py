@@ -1,4 +1,4 @@
-import struct
+from struct import Struct
 
 
 class DuplesStructs(object):
@@ -8,18 +8,17 @@ class DuplesStructs(object):
     
     # header structs indexed by version and size
     # should always be network byte order (big-endian)
-    duples_header = { (1,8):struct.Struct("!bb?bHxx") }
+    duples_header = { (1,8):Struct("!bb?bHxx") }
 
-    duples_stations = { True:struct.Struct('<6sxxIiII'), False:struct.Struct('>6sxxIiII') }
+    duples_stations = { True:Struct('<6sxxIiII'), False:Struct('>6sxxIiII') }
     
-    # macaddr_format = "%02x:%02x:%02x:%02x:%02x:%02x"
-    macaddr = struct.Struct("BBBBBB")
+    macaddr = Struct("BBBBBB")
 
-    uwifi_pkt = { True:struct.Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
-                False:struct.Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
+    uwifi_pkt = { True:Struct("<IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii"), \
+                False:Struct(">IiIBBxxII?xxxI??H6s6s6s34sQIIBxxxiBBBxIIIBBBxIIIIIIIii") }
 
-    uwifi_chan_freq = { True:struct.Struct("<iIibbxx"), False:struct.Struct(">iIibbxx") }
-    uwifi_chan_spec = { True:struct.Struct("<IiI"), False:struct.Struct(">IiI") }
+    uwifi_chan_freq = { True:Struct("<iIibbxx"), False:Struct(">iIibbxx") }
+    uwifi_chan_spec = { True:Struct("<IiI"), False:Struct(">IiI") }
 
     # ifctrl.h
-    sta_info = { True:struct.Struct("<6sbbI"), False:struct.Struct(">6sbbI") }
+    sta_info = { True:Struct("<6sbbI"), False:Struct(">6sbbI") }
