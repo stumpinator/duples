@@ -42,17 +42,17 @@ bool parseopts(int argc, char **argv, struct udpfwdopts *myopts)
     memset(myopts, 0, sizeof(struct udpfwdopts));
     myopts->daemonize = false;
     myopts->loglevel = MYLL;
-    myopts->dport = 2412;
+    myopts->dport = 2401;
     inet_aton("127.0.0.1", &myopts->daddr);
 
-    while ((opt = getopt(argc, argv, ":m:i:p:l:d")) != -1)
+    while ((opt = getopt(argc, argv, ":i:d:p:l:s")) != -1)
     {
         switch(opt)
         {
-            case 'm':
+            case 'i':
                 myopts->ifname = optarg;
                 break;
-            case 'i':
+            case 'd':
                 if ((inet_aton(optarg, &myopts->daddr)) == 0)
                 {
                     return false;
@@ -70,7 +70,7 @@ bool parseopts(int argc, char **argv, struct udpfwdopts *myopts)
                     return false;
                 }
                 break;
-            case 'd':
+            case 's':
                 myopts->daemonize = true;
                 break;
             case ':':
@@ -123,12 +123,12 @@ int main(int argc, char **argv) {
 
     if (!parseopts(argc, argv, &myopts))
     {
-        printf("example: %s -m mon0 -i 127.0.0.1 -p 2345 -l 2 -d\n", argv[0]);
-        printf("-m      monitor interface to sniff packets. required\n");
-        printf("-i      IP to send UDP packets. default 127.0.0.1\n");
-        printf("-p      port to send UDP packets. default 2412\n");
-        printf("-l      log level 2(CRIT) - 7(DEBUG).  default 3(ERROR)\n");
-        printf("-d      daemonize.  default false.  currently not implemented\n");
+        printf("example: %s -i mon0 [-d 127.0.0.1] [-p 2401] [-l 3] [-s]\n", argv[0]);
+        printf("-i      monitor interface to sniff packets. required\n");
+        printf("-d      IP to send UDP packets. default 127.0.0.1\n");
+        printf("-p      port to send UDP packets. default 2401\n");
+        printf("-l      log level 2(CRIT) - 7(DEBUG). default 3(ERROR). DEBUG requires compile flag\n");
+        printf("-s      daemonize.  default false.  currently not implemented\n");
         return 1;
     }
     

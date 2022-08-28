@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
 
     if (!parseopts(argc, argv, &myopts))
     {
-        printf("example: %s -i wifi0 -d 127.0.0.1 -p 2345 -l 2 -s\n", argv[0]);
+        printf("example: %s -i wifi0 [-d 127.0.0.1] [-p 2345] [-l 3] [-s]\n", argv[0]);
         printf("-i      interface to gather station and frequency info. required\n");
         printf("-d      IP to send UDP packets. default 127.0.0.1\n");
         printf("-p      port to send UDP packets. default 2412\n");
