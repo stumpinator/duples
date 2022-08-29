@@ -32,6 +32,7 @@ struct udpstatus_opts
     char *ifname;
     struct in_addr daddr;
     uint16_t dport;
+    uint64_t interval;
     uint16_t loglevel;
     bool daemonize;
 };
@@ -39,14 +40,16 @@ struct udpstatus_opts
 bool parseopts(int argc, char **argv, struct udpstatus_opts *myopts)
 {
     int opt = 0;
-    
+    float interval;
+
     memset(myopts, 0, sizeof(struct udpstatus_opts));
     myopts->daemonize = false;
     myopts->loglevel = MYLL;
     myopts->dport = 2412;
+    myopts->interval = 5000000;
     inet_aton("127.0.0.1", &myopts->daddr);
 
-    while ((opt = getopt(argc, argv, ":i:d:p:l:s")) != -1)
+    while ((opt = getopt(argc, argv, ":i:d:p:t:l:s")) != -1)
     {
         switch(opt)
         {
@@ -64,6 +67,13 @@ bool parseopts(int argc, char **argv, struct udpstatus_opts *myopts)
                 {
                     return false;
                 }
+                break;
+            case 't':
+                if (sscanf(optarg, "%f", &interval) != 1)
+                {
+                    return false;
+                }
+                myopts->interval = interval * 1000000;
                 break;
             case 'l':
                 if (sscanf(optarg, "%hu", &myopts->loglevel) != 1)
@@ -125,10 +135,11 @@ int main(int argc, char **argv) {
 
     if (!parseopts(argc, argv, &myopts))
     {
-        printf("example: %s -i wifi0 [-d 127.0.0.1] [-p 2345] [-l 3] [-s]\n", argv[0]);
+        printf("example: %s -i wifi0 [-d 127.0.0.1] [-p 2345] [-t 5.0] [-l 3] [-s]\n", argv[0]);
         printf("-i      interface to gather station and frequency info. required\n");
         printf("-d      IP to send UDP packets. default 127.0.0.1\n");
         printf("-p      port to send UDP packets. default 2412\n");
+        printf("-t      time interval in seconds between sending updates. default 5.0\n");
         printf("-l      log level 2(CRIT) - 7(DEBUG). default 3(ERROR). DEBUG requires compile flag\n");
         printf("-s      run as service (daemonize). currently not implemented\n");
         return 1;
@@ -209,7 +220,7 @@ int main(int argc, char **argv) {
             break;
         }
         
-        usleep(5000000);
+        usleep(myopts.interval);
     }
 
     /* cleanup and exit */
